@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  MENTOR
+  MENTEE
+}
+
+enum MatchStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum SessionStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum MentoringFormat {
+  VIRTUAL
+  HYBRID
+  IN_PERSON
+}
+
+model User {
+  id        String   @id
+  email     String   @unique
+  role      Role     @default(MENTEE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  mentorProfile  MentorProfile?
+  menteeProfile  MenteeProfile?
+  sentMessages   Message[]      @relation("sender")
+  mentorSessions Session[]      @relation("mentor_sessions")
+  menteeSessions Session[]      @relation("mentee_sessions")
+  notifications  Notification[]
+
+  @@map("users")
+}
+
+model MentorProfile {
+  id                        String   @id @default(cuid())
+  userId                    String   @unique @map("user_id")
+  displayName               String   @map("display_name")
+  title                     String
+  company                   String?
+  bio                       String
+  avatarUrl                 String?  @map("avatar_url")
+  linkedinUrl               String?  @map("linkedin_url")
+  yearsOfExperience         Int?            @map("years_of_experience")
+  timezone                  String?         @default("UTC")
+  preferredAvailabilityTime String?         @map("preferred_availability_time")
+  country                   String?         @map("country")
+  qualification             String?         @map("qualification")
+  mentoringFormat           MentoringFormat? @map("mentoring_format")
+  hourlyRate                Decimal?         @map("hourly_rate") @db.Decimal(10, 2)
+  availability              Json            @default("{}")
+  isVerified                Boolean  @default(false) @map("is_verified")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills  MentorSkill[]
+  matches Match[]
+
+  @@map("mentor_profiles")
+}
+
+model MenteeProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique @map("user_id")
+  displayName String   @map("display_name")
+  goals       String
+  background  String?
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matches Match[]
+
+  @@map("mentee_profiles")
+}
+
+model Skill {
+  id      String        @id @default(cuid())
+  name    String        @unique
+  mentors MentorSkill[]
+
+  @@map("skills")
+}
+
+model MentorSkill {
+  mentorId String @map("mentor_id")
+  skillId  String @map("skill_id")
+
+  mentor MentorProfile @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  skill  Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([mentorId, skillId])
+  @@map("mentor_skills")
+}
+
+model Match {
+  id        String      @id @default(cuid())
+  mentorId  String      @map("mentor_id")
+  menteeId  String      @map("mentee_id")
+  status    MatchStatus @default(PENDING)
+  message   String?
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  mentor   MentorProfile @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  mentee   MenteeProfile @relation(fields: [menteeId], references: [id], onDelete: Cascade)
+  sessions Session[]
+  messages Message[]
+
+  @@unique([mentorId, menteeId])
+  @@map("matches")
+}
+
+model Programme {
+  id            String   @id @default(cuid())
+  title         String
+  description   String
+  durationWeeks Int      @map("duration_weeks")
+  maxMentees    Int      @default(10) @map("max_mentees")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sessions Session[]
+
+  @@map("programmes")
+}
+
+model Session {
+  id           String        @id @default(cuid())
+  matchId      String        @map("match_id")
+  mentorId     String        @map("mentor_id")
+  menteeId     String        @map("mentee_id")
+  scheduledAt  DateTime      @map("scheduled_at")
+  durationMins Int           @default(60) @map("duration_mins")
+  status       SessionStatus @default(PENDING)
+  notes        String?
+  meetingUrl   String?       @map("meeting_url")
+  programmeId  String?       @map("programme_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  match     Match      @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  mentor    User       @relation("mentor_sessions", fields: [mentorId], references: [id])
+  mentee    User       @relation("mentee_sessions", fields: [menteeId], references: [id])
+  programme Programme? @relation(fields: [programmeId], references: [id])
+
+  @@map("sessions")
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  matchId   String    @map("match_id")
+  senderId  String    @map("sender_id")
+  content   String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sender User  @relation("sender", fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  body      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
