@@ -18,6 +18,7 @@ import {
   Trophy,
   Target,
   Zap,
+  Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -292,6 +293,62 @@ function FutureLeadersForm() {
   );
 }
 
+function BusinessIdeaForm() {
+  const [idea, setIdea] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const words = wordCount(idea);
+  const MIN = 300;
+  const MAX = 500;
+  if (submitted) return <SuccessMessage onReset={() => { setIdea(""); setFile(null); setSubmitted(false); }} />;
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (words < MIN || words > MAX) return; setSubmitted(true); }} className="space-y-4 pt-5">
+      <p className="text-sm text-gray-500 leading-relaxed">
+        Write a <strong className="text-gray-700">300–500 word pitch</strong> describing your business idea — the problem it solves, your target market, and why you&apos;re the right person to build it. You can also upload a supporting document.
+      </p>
+      <FormField>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="bi-idea" className="text-sm font-medium text-gray-700">Your Business Idea *</Label>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            words === 0 ? "bg-gray-100 text-gray-400"
+            : words < MIN ? "bg-orange-100 text-orange-600"
+            : words <= MAX ? "bg-green-100 text-green-600"
+            : "bg-red-100 text-red-600"
+          }`}>
+            {words} / 300–500 words
+          </span>
+        </div>
+        <Textarea
+          id="bi-idea"
+          placeholder="Describe your business idea, the problem it solves, your target market, and why you're the right person to build it…"
+          rows={9}
+          value={idea}
+          onChange={(e) => setIdea(e.target.value)}
+          className="resize-none rounded-xl border-gray-200"
+        />
+        {words > 0 && words < MIN && (
+          <p className="text-xs text-orange-500">{MIN - words} more words needed (minimum 300)</p>
+        )}
+        {words > MAX && (
+          <p className="text-xs text-red-500">{words - MAX} words over limit — please trim to 500</p>
+        )}
+      </FormField>
+      <FileUploadField
+        label="Supporting Document (optional)"
+        onChange={setFile}
+        file={file}
+      />
+      <Button
+        type="submit"
+        disabled={words < MIN || words > MAX}
+        className="w-full bg-orange-500 hover:bg-orange-600 text-white border-0 h-11 rounded-xl font-semibold disabled:opacity-50"
+      >
+        Submit Business Idea
+      </Button>
+    </form>
+  );
+}
+
 // ─── Service config ─────────────────────────────────────────────────────────────
 
 type ServiceConfig = {
@@ -393,6 +450,23 @@ const SERVICES: ServiceConfig[] = [
       "Limited places available",
     ],
     form: <FutureLeadersForm />,
+  },
+  {
+    id: "business-idea",
+    icon: Lightbulb,
+    badge: "New",
+    badgeColor: "bg-green-100 text-green-700",
+    iconBg: "bg-gradient-to-br from-green-500 to-green-700",
+    iconColor: "text-white",
+    accentBar: "from-green-400 to-green-600",
+    title: "Submit a Business Idea",
+    subtitle: "Pitch your business concept and get expert mentor feedback.",
+    bullets: [
+      "300–500 word written pitch",
+      "Reviewed by experienced mentors",
+      "Actionable feedback provided",
+    ],
+    form: <BusinessIdeaForm />,
   },
 ];
 
@@ -590,7 +664,7 @@ export default function ServicesPage() {
             </div>
             <div className="flex flex-col sm:flex-row gap-3 shrink-0">
               <Button asChild size="lg" className="bg-orange-500 hover:bg-orange-600 text-white border-0 h-12 px-8 rounded-xl font-semibold shadow-lg">
-                <Link href="/signup">
+                <Link href="/contact">
                   Book Free Call <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>

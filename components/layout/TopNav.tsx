@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getInitials } from "@/lib/utils";
 import { useState } from "react";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { BookingNotificationModal } from "@/components/layout/BookingNotificationModal";
 
 type NavItem = {
   href: string;
@@ -84,7 +85,12 @@ export function TopNav({ userId, userEmail, userRole, displayName, avatarUrl }: 
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {userRole === "MENTOR" && <NotificationBell userId={userId} />}
+          {userRole === "MENTOR" && (
+            <>
+              <NotificationBell userId={userId} />
+              <BookingNotificationModal userId={userId} />
+            </>
+          )}
 
           {/* Desktop user menu */}
           <div className="relative hidden md:block">

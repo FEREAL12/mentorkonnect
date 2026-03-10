@@ -1,12 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { format, getDay } from "date-fns";
-import { CalendarDays, Clock } from "lucide-react";
+import { CalendarDays, Clock, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,99 +25,82 @@ import { CalendarBooking } from "@/components/ui/calendar-booking";
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-const bookSchema = z.object({
-  time: z.string().min(1, "Please select a time slot"),
-  durationMins: z.coerce.number().min(30).max(120),
-  notes: z.string().optional(),
-  meetingUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-});
-
-type BookFormData = z.infer<typeof bookSchema>;
-
 interface Props {
   mentorProfileId: string;
   mentorName: string;
   availability: Record<string, string[]>;
-  isAuthenticated: boolean;
-  loginRedirect: string;
 }
 
 export function DirectBookForm({
   mentorProfileId,
   mentorName,
   availability,
-  isAuthenticated,
-  loginRedirect,
 }: Props) {
-  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [dateError, setDateError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isBooking, setIsBooking] = useState(false);
+  const [selectedTime, setSelectedTime] = useState("");
+  const [durationMins, setDurationMins] = useState(60);
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [notes, setNotes] = useState("");
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } =
-    useForm<BookFormData>({
-      resolver: zodResolver(bookSchema),
-      defaultValues: { durationMins: 60 },
-    });
+  const [dateError, setDateError] = useState("");
+  const [timeError, setTimeError] = useState("");
+
+  const [isBooked, setIsBooked] = useState(false);
 
   const availableSlots = selectedDate
     ? (availability[DAY_KEYS[getDay(selectedDate)]] ?? [])
     : [];
 
-  const handleDateChange = (date: Date) => {
-    setSelectedDate(date);
-    setDateError(null);
-    setValue("time", "");
-  };
-
-  const onSubmit = async (data: BookFormData) => {
+  const handleBook = () => {
     if (!selectedDate) {
       setDateError("Please select a date");
       return;
     }
+    setDateError("");
 
-    if (!isAuthenticated) {
-      router.push(`/login?redirect=${encodeURIComponent(loginRedirect)}`);
+    if (!selectedTime) {
+      setTimeError("Please select a time slot");
       return;
     }
+    setTimeError("");
 
-    setSubmitError(null);
-    setIsBooking(true);
+    setIsBooked(true);
 
     const scheduledAt = new Date(
-      `${format(selectedDate, "yyyy-MM-dd")}T${data.time}`
+      `${format(selectedDate, "yyyy-MM-dd")}T${selectedTime}`
     );
 
-    try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mentorProfileId,
-          scheduledAt: scheduledAt.toISOString(),
-          durationMins: data.durationMins,
-          notes: data.notes,
-          meetingUrl: data.meetingUrl || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setSubmitError(body.error ?? "Booking failed. Please try again.");
-        return;
-      }
-
-      router.push("/");
-    } catch {
-      setSubmitError("Network error. Please try again.");
-    } finally {
-      setIsBooking(false);
-    }
+    fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mentorProfileId,
+        scheduledAt: scheduledAt.toISOString(),
+        durationMins,
+        notes: notes || undefined,
+        meetingUrl: meetingUrl || undefined,
+      }),
+    }).catch(console.error);
   };
 
+  if (isBooked) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2 className="h-8 w-8 text-green-500" />
+        </div>
+        <div>
+          <p className="font-bold text-lg text-gray-900">Session Booked!</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Your session request has been submitted. The mentor will confirm shortly.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+    <div className="space-y-5">
       {/* ── Calendar ── */}
       <Card>
         <CardHeader className="pb-3">
@@ -136,7 +115,11 @@ export function DirectBookForm({
         <CardContent>
           <CalendarBooking
             value={selectedDate}
-            onChange={handleDateChange}
+            onChange={(date) => {
+              setSelectedDate(date);
+              setSelectedTime("");
+              setDateError("");
+            }}
             availability={availability}
           />
           {dateError && (
@@ -167,16 +150,15 @@ export function DirectBookForm({
               Pick a date above to choose a time.
             </p>
           ) : availableSlots.length > 0 ? (
-            /* Predefined slots — quick pick */
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {availableSlots.map((slot) => (
                   <button
                     key={slot}
                     type="button"
-                    onClick={() => setValue("time", slot, { shouldValidate: true })}
+                    onClick={() => { setSelectedTime(slot); setTimeError(""); }}
                     className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                      watch("time") === slot
+                      selectedTime === slot
                         ? "border-primary bg-primary text-white shadow-sm"
                         : "border-border hover:border-primary hover:text-primary"
                     }`}
@@ -190,12 +172,11 @@ export function DirectBookForm({
                 <input
                   type="time"
                   className="rounded border border-border px-2 py-0.5 text-xs"
-                  onChange={(e) => e.target.value && setValue("time", e.target.value, { shouldValidate: true })}
+                  onChange={(e) => { if (e.target.value) { setSelectedTime(e.target.value); setTimeError(""); } }}
                 />
               </p>
             </div>
           ) : (
-            /* No predefined slots — free time input */
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
                 This mentor hasn&apos;t set specific time slots. Pick any time that suits you.
@@ -203,17 +184,17 @@ export function DirectBookForm({
               <input
                 type="time"
                 className="w-full rounded-lg border border-border px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                onChange={(e) => e.target.value && setValue("time", e.target.value, { shouldValidate: true })}
+                onChange={(e) => { if (e.target.value) { setSelectedTime(e.target.value); setTimeError(""); } }}
               />
-              {watch("time") && (
+              {selectedTime && (
                 <p className="text-xs text-muted-foreground">
-                  Selected: <strong>{watch("time")}</strong>
+                  Selected: <strong>{selectedTime}</strong>
                 </p>
               )}
             </div>
           )}
-          {errors.time && (
-            <p className="mt-2 text-xs text-destructive">{errors.time.message}</p>
+          {timeError && (
+            <p className="mt-2 text-xs text-destructive">{timeError}</p>
           )}
         </CardContent>
       </Card>
@@ -229,7 +210,7 @@ export function DirectBookForm({
             <Label>Duration</Label>
             <Select
               defaultValue="60"
-              onValueChange={(v) => setValue("durationMins", parseInt(v))}
+              onValueChange={(v) => setDurationMins(parseInt(v))}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -250,11 +231,9 @@ export function DirectBookForm({
               id="meetingUrl"
               type="url"
               placeholder="https://meet.google.com/… or https://zoom.us/…"
-              {...register("meetingUrl")}
+              value={meetingUrl}
+              onChange={(e) => setMeetingUrl(e.target.value)}
             />
-            {errors.meetingUrl && (
-              <p className="text-xs text-destructive">{errors.meetingUrl.message}</p>
-            )}
           </div>
 
           <div className="space-y-2">
@@ -263,19 +242,16 @@ export function DirectBookForm({
               id="notes"
               placeholder="Topics you'd like to cover…"
               rows={3}
-              {...register("notes")}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </div>
         </CardContent>
       </Card>
 
-      {submitError && (
-        <p className="text-sm text-destructive text-center">{submitError}</p>
-      )}
-
-      <Button type="submit" className="w-full" size="lg" disabled={isBooking}>
-        {isBooking ? "Booking…" : "Book"}
+      <Button type="button" className="w-full" size="lg" onClick={handleBook}>
+        Book
       </Button>
-    </form>
+    </div>
   );
 }

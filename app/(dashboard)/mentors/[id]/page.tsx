@@ -14,7 +14,6 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import { WEEK_DAYS } from "@/types";
@@ -42,25 +41,6 @@ export default async function MentorProfilePage({ params }: PageProps) {
   });
 
   if (!mentor) notFound();
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const role = (user?.user_metadata?.role as string) ?? null;
-
-  let hasProfile = false;
-  if (user && role === "MENTEE") {
-    const menteeProfile = await prisma.menteeProfile.findUnique({
-      where: { userId: user.id },
-      select: { id: true },
-    });
-    hasProfile = !!menteeProfile;
-  }
-
-  const isAuthenticated = !!user && role === "MENTEE" && hasProfile;
-  const loginRedirect = `/mentors/${mentor.id}`;
 
   const availability = mentor.availability as Record<string, string[]>;
   const hourlyRate = (mentor as { hourlyRate?: number | null }).hourlyRate;
@@ -251,8 +231,6 @@ export default async function MentorProfilePage({ params }: PageProps) {
           mentorProfileId={mentor.id}
           mentorName={mentor.displayName}
           availability={availability}
-          isAuthenticated={isAuthenticated}
-          loginRedirect={loginRedirect}
         />
       </div>
     </div>

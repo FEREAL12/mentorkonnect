@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format, getDay } from "date-fns";
-import { Loader2, CalendarDays, Clock, CreditCard } from "lucide-react";
+import { Loader2, CalendarDays, Clock, CreditCard, CheckCircle2 } from "lucide-react";
 import type { Programme } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -90,6 +90,7 @@ export function BookSessionForm({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBooked, setIsBooked] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>("NGN");
@@ -153,7 +154,7 @@ export function BookSessionForm({
       const body = await res.json();
       throw new Error(body.error ?? "Failed to book session");
     }
-    router.push("/sessions");
+    setIsBooked(true);
   };
 
   const onSubmit = async (data: BookFormData) => {
@@ -200,6 +201,22 @@ export function BookSessionForm({
 
     handler.openIframe();
   };
+
+  if (isBooked) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2 className="h-8 w-8 text-green-500" />
+        </div>
+        <div>
+          <p className="font-bold text-lg text-gray-900">Session Booked!</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Payment confirmed. Your session request has been submitted and the mentor will confirm shortly.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
