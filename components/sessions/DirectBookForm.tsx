@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { format, getDay } from "date-fns";
+import { createClient } from "@/lib/supabase/client";
 import { CalendarDays, Clock, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -46,12 +48,14 @@ export function DirectBookForm({
   const [timeError, setTimeError] = useState("");
 
   const [isBooked, setIsBooked] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookError, setBookError] = useState("");
 
   const availableSlots = selectedDate
     ? (availability[DAY_KEYS[getDay(selectedDate)]] ?? [])
     : [];
 
-  const handleBook = () => {
+  const handleBook = async () => {
     if (!selectedDate) {
       setDateError("Please select a date");
       return;
@@ -63,24 +67,54 @@ export function DirectBookForm({
       return;
     }
     setTimeError("");
-
-    setIsBooked(true);
+    setBookError("");
+    setIsSubmitting(true);
 
     const scheduledAt = new Date(
       `${format(selectedDate, "yyyy-MM-dd")}T${selectedTime}`
     );
 
-    fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mentorProfileId,
-        scheduledAt: scheduledAt.toISOString(),
-        durationMins,
-        notes: notes || undefined,
-        meetingUrl: meetingUrl || undefined,
-      }),
-    }).catch(console.error);
+    try {
+      // Get the current session token so the API route can verify auth
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          mentorProfileId,
+          scheduledAt: scheduledAt.toISOString(),
+          durationMins,
+          notes: notes || undefined,
+          meetingUrl: meetingUrl || undefined,
+        }),
+      });
+
+      if (res.status === 401) {
+        setBookError("You need to be signed in to book a session. Please log in first.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setBookError(data.error ?? "Failed to book session. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      setIsBooked(true);
+    } catch {
+      setBookError("Network error. Please check your connection and try again.");
+      setIsSubmitting(false);
+    }
   };
 
   if (isBooked) {
@@ -249,8 +283,25 @@ export function DirectBookForm({
         </CardContent>
       </Card>
 
-      <Button type="button" className="w-full" size="lg" onClick={handleBook}>
-        Book
+      {bookError && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+          {bookError}
+          {bookError.includes("signed in") && (
+            <Link href="/login" className="ml-1 font-semibold underline underline-offset-2 hover:text-red-800">
+              Sign in
+            </Link>
+          )}
+        </div>
+      )}
+
+      <Button
+        type="button"
+        className="w-full"
+        size="lg"
+        onClick={handleBook}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? "Booking…" : "Book"}
       </Button>
     </div>
   );

@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
 import { sendBookingNotificationToMentor } from "@/lib/email";
 
 export async function POST(request: Request) {
+  // Try cookie-based auth first, then fall back to Bearer token
+  let user = null;
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user: cookieUser } } = await supabase.auth.getUser();
+  user = cookieUser;
+
+  if (!user) {
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice(7);
+      const { data: { user: tokenUser } } = await supabaseAdmin.auth.getUser(token);
+      user = tokenUser;
+    }
+  }
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -43,15 +55,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the mentee's profile
-    const menteeProfile = await prisma.menteeProfile.findUnique({
+    // Get or auto-create a mentee profile — any logged-in user can book
+    let menteeProfile = await prisma.menteeProfile.findUnique({
       where: { userId: user.id },
     });
     if (!menteeProfile) {
-      return NextResponse.json(
-        { error: "Please complete your mentee profile before booking" },
-        { status: 400 }
-      );
+      const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true } });
+      menteeProfile = await prisma.menteeProfile.create({
+        data: {
+          userId: user.id,
+          displayName: dbUser?.email?.split("@")[0] ?? "User",
+          goals: "",
+        },
+      });
     }
 
     // Get the mentor profile (to resolve their userId)
