@@ -108,7 +108,7 @@ export function BookingNotificationModal({ userId }: Props) {
 
   return (
     /* Bottom-right toast — no backdrop, doesn't block the page */
-    <div className="fixed bottom-6 right-6 z-50 w-full max-w-sm pointer-events-auto">
+    <div className="fixed bottom-24 right-6 z-50 w-full max-w-sm pointer-events-auto">
       <div className="relative overflow-hidden rounded-2xl shadow-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-white/10 text-white">
 
         {/* Glowing orb accent */}

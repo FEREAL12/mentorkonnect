@@ -194,3 +194,15 @@ model Notification {
 
   @@map("notifications")
 }
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  sessionId   String   @map("session_id")
+  senderName  String   @default("Visitor") @map("sender_name")
+  message     String
+  fromAdmin   Boolean  @default(false) @map("from_admin")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
