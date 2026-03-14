@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,24 +55,21 @@ export function SignupForm({ role }: SignupFormProps) {
     setIsLoading(true);
     setError(null);
 
-    const supabase = createClient();
-
-    // Sign up with email — Supabase sends a 6-digit OTP to the email address
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { role, phone: data.phone },
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-      },
+    const res = await fetch("/api/auth/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: data.email, password: data.password, role }),
     });
 
-    if (signUpError) {
-      setError(signUpError.message);
+    const json = await res.json();
+
+    if (!res.ok) {
+      setError(json.error ?? "Failed to send verification email. Please try again.");
       setIsLoading(false);
       return;
     }
 
+    sessionStorage.setItem("otpPendingToken", json.pendingToken);
     window.location.href = `/verify?email=${encodeURIComponent(data.email)}&type=${role === "MENTOR" ? "mentor" : "mentee"}`;
   };
 

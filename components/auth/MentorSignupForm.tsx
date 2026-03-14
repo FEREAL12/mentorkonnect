@@ -19,7 +19,6 @@ import {
   ChevronLeft,
   Sparkles,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -256,8 +255,6 @@ export function MentorSignupForm() {
     setIsLoading(true);
     setError(null);
 
-    const supabase = createClient();
-
     // 1. Upload avatar using a temporary ID (replaced after OTP verification)
     let avatarUrl: string | null = null;
     const tempId = crypto.randomUUID();
@@ -275,38 +272,36 @@ export function MentorSignupForm() {
       return;
     }
 
-    // 2. Create the Supabase auth account with email — triggers email OTP
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { role: "MENTOR", phone: data.phone },
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-      },
+    // 2. Send OTP via Resend (custom flow — bypasses Supabase email limits)
+    const mentorData = {
+      displayName: data.fullName,
+      title: data.profession,
+      bio: `Mentor with ${data.yearsOfExperience} years of experience in ${data.profession}.`,
+      country: data.country,
+      yearsOfExperience: data.yearsOfExperience,
+      mentoringFormat: data.mentoringStyle,
+      hourlyRate: data.hourlyRate,
+      preferredAvailabilityTime: data.trainingTime.join(","),
+      avatarUrl,
+      availability: buildAvailability(data.trainingTime),
+    };
+
+    const res = await fetch("/api/auth/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: data.email, password: data.password, role: "MENTOR", mentorData }),
     });
 
-    if (signUpError) {
-      setError(signUpError.message);
+    const json = await res.json();
+
+    if (!res.ok) {
+      setError(json.error ?? "Failed to send verification email. Please try again.");
       setIsLoading(false);
       return;
     }
 
-    // 3. Save mentor profile data so the verify page can complete setup after OTP
-    sessionStorage.setItem(
-      "mentorSignupData",
-      JSON.stringify({
-        displayName: data.fullName,
-        title: data.profession,
-        bio: `Mentor with ${data.yearsOfExperience} years of experience in ${data.profession}.`,
-        country: data.country,
-        yearsOfExperience: data.yearsOfExperience,
-        mentoringFormat: data.mentoringStyle,
-        hourlyRate: data.hourlyRate,
-        preferredAvailabilityTime: data.trainingTime.join(","),
-        avatarUrl,
-        availability: buildAvailability(data.trainingTime),
-      })
-    );
+    // 3. Store pending token for the verify page
+    sessionStorage.setItem("otpPendingToken", json.pendingToken);
 
     // 4. Redirect to email OTP verification
     window.location.href = `/verify?email=${encodeURIComponent(data.email)}&type=mentor`;

@@ -7,10 +7,10 @@ import { Loader2, Mail, RotateCcw, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
+
 export function VerifyOtpForm() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") ?? "";
-  const type = (searchParams.get("type") as "mentor" | "mentee") ?? "mentee";
 
   const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
   const [error, setError] = useState<string | null>(null);
@@ -52,8 +52,8 @@ export function VerifyOtpForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = otp.join("");
-    if (token.length < 6) {
+    const code = otp.join("");
+    if (code.length < 6) {
       setError("Please enter the full 6-digit code.");
       return;
     }
@@ -61,52 +61,36 @@ export function VerifyOtpForm() {
     setIsLoading(true);
     setError(null);
 
-    const supabase = createClient();
-
-    // Verify the email OTP — establishes a session via @supabase/ssr
-    const { data, error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: "signup",
-    });
-
-    if (verifyError || !data.user) {
-      setError(verifyError?.message ?? "Invalid or expired code. Please try again.");
+    const pendingToken = sessionStorage.getItem("otpPendingToken");
+    if (!pendingToken) {
+      setError("Session expired. Please sign up again.");
       setIsLoading(false);
       return;
     }
 
-    // Retrieve mentor profile data from sessionStorage (set by MentorSignupForm)
-    let mentorData: Record<string, unknown> | null = null;
-    if (type === "mentor") {
-      try {
-        mentorData = JSON.parse(sessionStorage.getItem("mentorSignupData") ?? "null");
-      } catch {
-        mentorData = null;
-      }
-    }
-
-    // Complete signup: upsert user in DB and create mentor profile if needed
-    const res = await fetch("/api/auth/complete-signup", {
+    const res = await fetch("/api/auth/verify-custom-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: data.user.id,
-        email,
-        role: type === "mentor" ? "MENTOR" : "MENTEE",
-        mentorData,
-      }),
+      body: JSON.stringify({ otp: code, pendingToken }),
     });
 
+    const body = await res.json().catch(() => ({}));
+
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Account setup failed. Please contact support.");
+      setError(body.error ?? "Invalid or expired code. Please try again.");
       setIsLoading(false);
       return;
     }
 
-    if (type === "mentor") {
-      sessionStorage.removeItem("mentorSignupData");
+    sessionStorage.removeItem("otpPendingToken");
+
+    // Set the session in the Supabase client if tokens were returned
+    if (body.session) {
+      const supabase = createClient();
+      await supabase.auth.setSession({
+        access_token: body.session.access_token,
+        refresh_token: body.session.refresh_token,
+      });
     }
 
     window.location.href = "/";
@@ -116,12 +100,28 @@ export function VerifyOtpForm() {
     setIsResending(true);
     setResent(false);
     setError(null);
-    const supabase = createClient();
-    const { error: resendError } = await supabase.auth.resend({ type: "signup", email });
+
+    const pendingToken = sessionStorage.getItem("otpPendingToken");
+    if (!pendingToken) {
+      setError("Session expired. Please sign up again.");
+      setIsResending(false);
+      return;
+    }
+
+    // Decode the pending token to get signup data and send a new OTP
+    const res = await fetch("/api/auth/send-otp/resend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pendingToken }),
+    });
+
+    const body = await res.json().catch(() => ({}));
     setIsResending(false);
-    if (resendError) {
-      setError(resendError.message);
+
+    if (!res.ok) {
+      setError(body.error ?? "Failed to resend code. Please try again.");
     } else {
+      sessionStorage.setItem("otpPendingToken", body.pendingToken);
       setResent(true);
       setOtp(Array(6).fill(""));
       inputRefs.current[0]?.focus();
