@@ -1,25 +1,9 @@
 import { NextResponse } from "next/server";
-import { signToken } from "../route";
 import { Resend } from "resend";
-import crypto from "crypto";
+import { signToken, verifyAndDecodeToken } from "@/lib/otp";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.EMAIL_FROM ?? "onboarding@resend.dev";
-const SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-function verifyAndDecodeToken(token: string): Record<string, unknown> | null {
-  const dotIndex = token.lastIndexOf(".");
-  if (dotIndex === -1) return null;
-  const data = token.slice(0, dotIndex);
-  const sig = token.slice(dotIndex + 1);
-  const expected = crypto.createHmac("sha256", SECRET).update(data).digest("base64url");
-  if (expected !== sig) return null;
-  try {
-    return JSON.parse(Buffer.from(data, "base64url").toString("utf-8"));
-  } catch {
-    return null;
-  }
-}
 
 // POST /api/auth/send-otp/resend
 export async function POST(request: Request) {

@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import crypto from "crypto";
+import { signToken } from "@/lib/otp";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.EMAIL_FROM ?? "onboarding@resend.dev";
-const SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-export function signToken(payload: object): string {
-  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto.createHmac("sha256", SECRET).update(data).digest("base64url");
-  return `${data}.${sig}`;
 }
 
 async function sendOtpEmail(email: string, otp: string) {
